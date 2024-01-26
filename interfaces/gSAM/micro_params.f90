@@ -15,6 +15,7 @@ integer :: iqv_old, itabs_old
 !   = 1 for Seifert-Beheng (2001)
 !   = 2 for Beheng (1994)
 !   = 3 for Khairoutdinov-Kogan (2000) <-- DEFAULT
+! = 4 Kogan 2013
 integer, public :: iWarmRainScheme = 3 
 
 ! control properties of cloud drop size distribution.

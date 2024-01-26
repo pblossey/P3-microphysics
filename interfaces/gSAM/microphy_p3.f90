@@ -36,6 +36,13 @@
  use tdpack_const, only: aerk1w
 #endif
 
+ !bloss/gSAM: begin
+ use grid, only: masterproc, dompi
+ use consts, only: cp_SAM => cp, ggr_SAM => ggr, rgas_SAM => rgas, &
+      rv_SAM => rv, lcond_SAM => lcond, lfus_SAM => lfus
+ use micro_params
+ !bloss/gSAM: end
+ 
  implicit none
 
  private
@@ -159,7 +166,8 @@
  real                           :: lamr,mu_r,dum,dm,dum1,dum2,dum3,dum4,dum5,dd,amg,vt,dia
  double precision               :: dp_dum1, dp_dum2
  logical                        :: err_abort
-
+ integer                        :: itmp(1) !bloss/gSAM
+ 
 !------------------------------------------------------------------------------------------!
 
  read_path = lookup_file_dir           ! path for lookup tables from official model library
@@ -193,28 +201,31 @@
  piov6 = pi*sxth
 
 ! maximum total ice concentration (sum of all categories)
- max_total_Ni = 2000.e+3  !(m)
-
+ max_total_Ni = MaxTotalIceNumber  !(m) !bloss/gSAM: begin
+! max_total_Ni = 2000.e+3  !(m)
+ 
 ! switch for warm-rain parameterization
 ! = 1 Seifert and Beheng 2001
 ! = 2 Beheng 1994
 ! = 3 Khairoutdinov and Kogan 2000
 ! = 4 Kogan 2013
- iparam = 3
+iparam = iWarmRainScheme !bloss/gSAM: begin
+! iparam = 3
 
 ! droplet concentration (m-3)
- nccnst = 200.e+6
-
+ nccnst = 1.e6*Nc0 !bloss/gSAM: begin
+! nccnst = 200.e+6
+ 
 ! parameters for Seifert and Beheng (2001) autoconversion/accretion
  kc     = 9.44e+9
  kr     = 5.78e+3
 
 ! physical constants
- cp     = 1005.
+ cp     = cp_SAM !bloss/gSAM 1005.
  inv_cp = 1./cp
- g      = 9.816
- rd     = 287.15
- rv     = 461.51
+ g      = ggr_SAM !bloss/gSAM 9.816
+ rd     = rgas_SAM !bloss/gSAM 287.15
+ rv     = rv_SAM !bloss/gSAM 461.51
  ep_2   = 0.622
  rhosur = 100000./(rd*273.15)
  rhosui = 60000./(rd*253.15)
@@ -330,7 +341,8 @@
 ! read in ice microphysics table
 
  procnum = 0
-
+ if(.not.masterproc) procnum = -1 !bloss/gSAM
+ 
 #ifdef ECCCGEM
  call rpn_comm_rank(RPN_COMM_GRID,procnum,istat)
 #endif
@@ -569,6 +581,12 @@
 
  endif IF_PROC0
 
+ if(dompi) then !bloss/gSAM
+    itmp(1) = global_status
+    call task_bcast_mpi(0, itmp, 1)
+    global_status = itmp(1)
+ end if
+
 #ifdef ECCCGEM
  call rpn_comm_bcast(global_status,1,RPN_COMM_INTEGER,0,RPN_COMM_GRID,istat)
 #endif
@@ -582,6 +600,33 @@
     return
  endif
 
+!bloss/gSAM: begin
+ if(dompi) then 
+    if (trplMomI) then
+       call task_bcast_sixdim_array_real8(0, itab_3mom, zsize,densize,rimsize,liqsize,isize,tabsize_3mom)
+       call task_bcast_sevendim_array_real8(0, itabcoll_3mom,zsize,densize,rimsize,liqsize,isize,rcollsize,colltabsize)
+    else
+       call task_bcast_fivedim_array_real8(0, itab, densize,rimsize,liqsize,isize,tabsize)
+       call task_bcast_sixdim_array_real8(0, itabcoll, densize,rimsize,liqsize,isize,rcollsize,colltabsize)
+    endif
+    if (nCat>1) then
+       if (liqfrac) then
+          call task_bcast_sixdim_array_real8(0,itabcolli001,iisize,rimsize,densize,iisize,rimsize,densize)
+          call task_bcast_sixdim_array_real8(0,itabcolli002,iisize,rimsize,densize,iisize,rimsize,densize)
+          call task_bcast_sixdim_array_real8(0,itabcolli011,iisize,rimsize,densize,iisize,rimsize,densize)
+          call task_bcast_sixdim_array_real8(0,itabcolli012,iisize,rimsize,densize,iisize,rimsize,densize)
+          call task_bcast_sixdim_array_real8(0,itabcolli101,iisize,rimsize,densize,iisize,rimsize,densize)
+          call task_bcast_sixdim_array_real8(0,itabcolli102,iisize,rimsize,densize,iisize,rimsize,densize)
+          call task_bcast_sixdim_array_real8(0,itabcolli111,iisize,rimsize,densize,iisize,rimsize,densize)
+          call task_bcast_sixdim_array_real8(0,itabcolli112,iisize,rimsize,densize,iisize,rimsize,densize)
+       else
+          call task_bcast_sixdim_array_real8(0,itabcolli001,iisize,rimsize,densize,iisize,rimsize,densize)
+          call task_bcast_sixdim_array_real8(0,itabcolli002,iisize,rimsize,densize,iisize,rimsize,densize)
+       endif
+    endif
+ end if
+!bloss/gSAM: end
+ 
 #ifdef ECCCGEM
  if (trplMomI) then
     call rpn_comm_bcast(itab_3mom,size(itab_3mom),RPN_COMM_REAL,0,RPN_COMM_GRID,istat)
@@ -2270,8 +2315,8 @@ END subroutine p3_init
      !calculate some time-varying atmospheric variables
        rho(i,k)     = pres(i,k)/(rd*t(i,k))
        inv_rho(i,k) = 1./rho(i,k)
-       xxlv(i,k)    = 3.1484e6-2370.*273.15 !t(i,k), use constant Lv
-       xxls(i,k)    = xxlv(i,k)+0.3337e6
+       xxlv(i,k)    = lcond_SAM !bloss/gSAM 3.1484e6-2370.*273.15 !t(i,k), use constant Lv
+       xxls(i,k)    = xxlv(i,k) + lfus_SAM !bloss/gSAM +0.3337e6
        xlf(i,k)     = xxls(i,k)-xxlv(i,k)
      ! max statement added below for first calculation when t_old is zero before t_old is set at end of p3 main
        qvs(i,k)     = qv_sat(max(t_old(i,k),1.),pres(i,k),0)
@@ -10359,39 +10404,46 @@ SUBROUTINE access_lookup_table_coll_3mom_LF(dumzz,dumjj,dumii,dumll,dumj,dumi,in
 
 !-------------------------------------------
 
-      if (i_type.EQ.1 .and. T.lt.273.15) then
-! ICE
+  !bloss/gSAM: begin
+  if ((i_type.eq.1).AND.(t_atm.lt.273.15)) then
+     polysvp1 = 100.*esati(t)
+  else
+     polysvp1 = 100.*esatw(t)
+  end if
 
-! use Goff-Gratch for T < 195.8 K and Flatau et al. equal or above 195.8 K
-         if (t.ge.195.8) then
-            dt=t-273.15
-            polysvp1 = a0i + dt*(a1i+dt*(a2i+dt*(a3i+dt*(a4i+dt*(a5i+dt*(a6i+dt*(a7i+a8i*dt)))))))
-            polysvp1 = polysvp1*100.
-         else
-            polysvp1 = 10.**(-9.09718*(273.16/t-1.)-3.56654* &
-                alog10(273.16/t)+0.876793*(1.-t/273.16)+ &
-                alog10(6.1071))*100.
-         end if
-
-      elseif (i_type.EQ.0 .or. T.ge.273.15) then
-! LIQUID
-
-! use Goff-Gratch for T < 202.0 K and Flatau et al. equal or above 202.0 K
-         if (t.ge.202.0) then
-            dt = t-273.15
-            polysvp1 = a0 + dt*(a1+dt*(a2+dt*(a3+dt*(a4+dt*(a5+dt*(a6+dt*(a7+a8*dt)))))))
-            polysvp1 = polysvp1*100.
-         else
-! note: uncertain below -70 C, but produces physical values (non-negative) unlike flatau
-            polysvp1 = 10.**(-7.90298*(373.16/t-1.)+ &
-                5.02808*alog10(373.16/t)- &
-                1.3816e-7*(10**(11.344*(1.-t/373.16))-1.)+ &
-                8.1328e-3*(10**(-3.49149*(373.16/t-1.))-1.)+ &
-                alog10(1013.246))*100.
-         end if
-
-         endif
-
+!bloss/gSAM  if (i_type.EQ.1 .and. T.lt.273.15) then
+!bloss/gSAM! ICE
+!bloss/gSAM
+!bloss/gSAM! use Goff-Gratch for T < 195.8 K and Flatau et al. equal or above 195.8 K
+!bloss/gSAM         if (t.ge.195.8) then
+!bloss/gSAM            dt=t-273.15
+!bloss/gSAM            polysvp1 = a0i + dt*(a1i+dt*(a2i+dt*(a3i+dt*(a4i+dt*(a5i+dt*(a6i+dt*(a7i+a8i*dt)))))))
+!bloss/gSAM            polysvp1 = polysvp1*100.
+!bloss/gSAM         else
+!bloss/gSAM            polysvp1 = 10.**(-9.09718*(273.16/t-1.)-3.56654* &
+!bloss/gSAM                alog10(273.16/t)+0.876793*(1.-t/273.16)+ &
+!bloss/gSAM                alog10(6.1071))*100.
+!bloss/gSAM         end if
+!bloss/gSAM
+!bloss/gSAM      elseif (i_type.EQ.0 .or. T.ge.273.15) then
+!bloss/gSAM! LIQUID
+!bloss/gSAM
+!bloss/gSAM! use Goff-Gratch for T < 202.0 K and Flatau et al. equal or above 202.0 K
+!bloss/gSAM         if (t.ge.202.0) then
+!bloss/gSAM            dt = t-273.15
+!bloss/gSAM            polysvp1 = a0 + dt*(a1+dt*(a2+dt*(a3+dt*(a4+dt*(a5+dt*(a6+dt*(a7+a8*dt)))))))
+!bloss/gSAM            polysvp1 = polysvp1*100.
+!bloss/gSAM         else
+!bloss/gSAM! note: uncertain below -70 C, but produces physical values (non-negative) unlike flatau
+!bloss/gSAM            polysvp1 = 10.**(-7.90298*(373.16/t-1.)+ &
+!bloss/gSAM                5.02808*alog10(373.16/t)- &
+!bloss/gSAM                1.3816e-7*(10**(11.344*(1.-t/373.16))-1.)+ &
+!bloss/gSAM                8.1328e-3*(10**(-3.49149*(373.16/t-1.))-1.)+ &
+!bloss/gSAM                alog10(1013.246))*100.
+!bloss/gSAM         end if
+!bloss/gSAM
+!bloss/gSAM         endif
+!bloss/gSAM: end
 
  end function polysvp1
 
