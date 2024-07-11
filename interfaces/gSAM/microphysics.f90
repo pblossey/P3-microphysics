@@ -759,8 +759,10 @@ end if
         call p3_main( qc=tmpqc(i:i,kk:), nc=tmpnc(i:i,kk:), qr=tmpqr(i:i,kk:), &
               nr=tmpnr(i:i,kk:), th_old=tmpth_old(i:i,kk:), th=tmpth(i:i,kk:), &
               qv_old=tmpqv_old(i:i,kk:), qv=tmpqv(i:i,kk:), &
-              dt=dtn, qitot=tmpqit(i:i,kk:,:), qirim=tmpqir(i:i,kk:,:), nitot=tmpnit(i:i,kk:,:), &
-              birim=tmpbir(i:i,kk:,:), ssat=ssat(i:i,kk:), uzpl=tmpw(i:i,kk:), &
+              dt=dtn, qitot=tmpqit(i:i,kk:,:), qirim=tmpqir(i:i,kk:,:), &
+              qiliq=tmpqiliq(i:i,kk:,:), nitot=tmpnit(i:i,kk:,:), & !qiliq new in P3 v3.X
+              birim=tmpbir(i:i,kk:,:), nitot=tmpnit(i:i,kk:,:), & !zitot new in P3 v3.X
+              ssat=ssat(i:i,kk:), uzpl=tmpw(i:i,kk:), &
               pres=tmppres(i:i,kk:), dzq=tmpdz(i:i,kk:), it=itstep, &
               prt_liq=pcprt_liq(i:i), prt_sol=pcprt_sol(i:i), &
               its=1, ite=1, kts=1, kte=nzm-kk+1, nCat=nCat,            &
@@ -768,15 +770,20 @@ end if
               diag_vmi=diag_vmi(i:i,kk:), diag_di=diag_di(i:i,kk:), diag_rhoi=diag_rhopo(i:i,kk:), &
               n_diag_2d=n_diag_2d, diag_2d=diag_2d(i:i,:), &
               n_diag_3d=n_diag_3d, diag_3d=diag_3d(i:i,kk:,:), &
-              log_predictNc=log_predictNc, typeDiags_ON=typeDiags_ON, model=trim(model), &
+              log_predictNc=log_predictNc, model=trim(model), & !typeDiags_ON removed in P3 v3.X
               clbfact_dep=clbfact_dep, clbfact_sub=clbfact_sub, debug_on=debug_on, &
               scpf_on=scpf_on, scpf_pfrac=scpf_pfrac, scpf_resfact=scpf_resfact, &
               SCF_out=SCF_out(i:i,kk:), &
+              log_3momentIce=log_3momentIce,log_LiquidFrac=log_LiquidFrac, & !new in P3 v3.X
               prt_drzl=prt_drzl(i:i), prt_rain=prt_rain(i:i), &
               prt_crys=prt_crys(i:i), prt_snow=prt_snow(i:i), &
               prt_grpl=prt_grpl(i:i), prt_pell=prt_pell(i:i), &
               prt_hail=prt_hail(i:i), prt_sndp=prt_sndp(i:i), &
-              qi_type=qi_type(i:i,kk:,:), rho=tmprho(i:i,kk:), &
+              prt_wlsnow=prt_wlsnow(i:i), & !new in P3 v3.X
+              prt_wcrys=prt_wcrys(i:i), prt_wsnow=prt_wsnow(i:i), & !new in P3 v3.X
+              prt_wgrpl=prt_wgrpl(i:i), prt_wpell=prt_wpell(i:i), & !new in P3 v3.X
+              prt_whail=prt_whail(i:i), & !new in P3 v3.X
+              qi_type=qi_type(i:i,kk:,:), rho=tmprho(i:i,kk:), & ! TODO: Add rho, etc. to p3_main in microphy_p3.f90
               pgam_out=tmp_cl_pgam(i:i,kk:), lamc_out=tmp_cl_lambda(i:i,kk:), &
               mtend=tmp_mtend(i:i,kk:,:), stend=tmp_stend(i:i,kk:,:), &
               micro_proc_rates=tmp_micro_proc_rates(i:i,kk:,:), &
